@@ -1,0 +1,51 @@
+[
+  {
+    "id": "geisha_5_1",
+    "name": "明燈花音",
+    "charm_value": 5,
+    "gift_item": "櫻花髮簪",
+    "gift_count": 5
+  },
+  {
+    "id": "geisha_4_1",
+    "name": "茶香雅美",
+    "charm_value": 4,
+    "gift_item": "茶具",
+    "gift_count": 4
+  },
+  {
+    "id": "geisha_3_1",
+    "name": "弦月音彩",
+    "charm_value": 3,
+    "gift_item": "三味線",
+    "gift_count": 3
+  },
+  {
+    "id": "geisha_3_2",
+    "name": "雨晴小町",
+    "charm_value": 3,
+    "gift_item": "油紙傘",
+    "gift_count": 3
+  },
+  {
+    "id": "geisha_2_2",
+    "name": "風花舞姬",
+    "charm_value": 2,
+    "gift_item": "扇扇",
+    "gift_count": 2
+  },
+  {
+    "id": "geisha_2_3",
+    "name": "雅音琴心",
+    "charm_value": 2,
+    "gift_item": "日式樂器",
+    "gift_count": 2
+  },
+  {
+    "id": "geisha_2_4",
+    "name": "墨香詩織",
+    "charm_value": 2,
+    "gift_item": "古書卷軸",
+    "gift_count": 2
+  }
+]

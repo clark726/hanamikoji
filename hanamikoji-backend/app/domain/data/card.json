@@ -1,0 +1,44 @@
+[
+  {
+    "charm_value": 5,
+    "name": "櫻花髮簪",
+    "geisha_id": "geisha_5_1",
+    "count": 5
+  },
+  {
+    "charm_value": 4,
+    "name": "茶具",
+    "geisha_id": "geisha_4_1",
+    "count": 4
+  },
+  {
+    "charm_value": 3,
+    "name": "三味線",
+    "geisha_id": "geisha_3_1",
+    "count": 3
+  },
+  {
+    "charm_value": 3,
+    "name": "油紙傘",
+    "geisha_id": "geisha_3_2",
+    "count": 3
+  },
+  {
+    "charm_value": 2,
+    "name": "扇扇",
+    "geisha_id": "geisha_2_2",
+    "count": 2
+  },
+  {
+    "charm_value": 2,
+    "name": "日式樂器",
+    "geisha_id": "geisha_2_3",
+    "count": 2
+  },
+  {
+    "charm_value": 2,
+    "name": "古書卷軸",
+    "geisha_id": "geisha_2_4",
+    "count": 2
+  }
+]
