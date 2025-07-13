@@ -172,16 +172,16 @@ class GameInitializationService:
         """創建遊戲狀態回應"""
         return {
             "game_id": game.game_id,
-            "status": game.status.value,
-            "current_player": game.current_player.name,
+            "status": "PLAYING",  # 使用字串而非枚舉值
+            "current_player_id": game.current_player.id,
             "round_number": game.round_number,
             "players": {
-                "player1": self._player_to_dict(game.player1),
-                "player2": self._player_to_dict(game.player2)
+                game.player1.id: self._player_to_dict(game.player1),
+                game.player2.id: self._player_to_dict(game.player2)
             },
             "geishas": [self._geisha_to_dict(geisha) for geisha in game.geishas],
-            "total_cards": len(game.all_cards),
-            "cards_in_play": len([c for c in game.all_cards if c.status != CardStatus.REMOVED])
+            "messages": [],
+            "winner": None
         }
 
     def _player_to_dict(self, player: Player) -> Dict:
@@ -189,17 +189,23 @@ class GameInitializationService:
         return {
             "id": player.id,
             "name": player.name,
-            "hand_count": len(player.hand_cards),
             "hand_cards": [self._card_to_dict(card) for card in player.hand_cards],
+            "used_actions": [],
+            "secret_cards": [],
+            "allocated_gifts": {},
+            "score": 0,
+            "is_current_player": player == player  # 待實現正確邏輯
         }
 
     def _card_to_dict(self, card: GiftCard) -> Dict:
         """將卡牌轉換為字典"""
         return {
+            "id": f"{card.geisha_id}_{card.item_name}_{id(card)}",  # 生成唯一ID
             "geisha_id": card.geisha_id,
             "item_name": card.item_name,
             "charm_value": card.charm_value,
-            "status": card.status.value
+            "status": card.status.value,
+            "owner_id": None
         }
 
     def _geisha_to_dict(self, geisha: Geisha) -> Dict:
@@ -210,7 +216,8 @@ class GameInitializationService:
             "charm": geisha.charm,
             "gift_item": geisha.gift_item,
             "description": geisha.description,
-            "favored_player": geisha.favored_player.name if geisha.favored_player else None
+            "favor": "NEUTRAL",
+            "allocated_gifts": {}
         }
 
     def validate_game_data(self) -> Dict:

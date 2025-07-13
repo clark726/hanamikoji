@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     # 資料庫設定
     database_url: str = "sqlite:///./data/hanamikoji.db"
     db_echo: bool = True
+    
+    # MongoDB設定
+    mongodb_url: str = "mongodb://localhost:30017"
+    mongodb_db_name: str = "hanamikoji_game"
 
     # 安全設定
     secret_key: str = "dev-secret-key"

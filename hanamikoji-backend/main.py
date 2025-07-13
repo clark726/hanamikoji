@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.database.connection import get_db
 from app.domain.factories.game_factory import GameInitializationService
+from app.api.routes import game
 
 # 建立 FastAPI 應用程式
 app = FastAPI(
@@ -61,9 +62,8 @@ async def games():
     service = GameInitializationService()
     return service.initialize_new_game("玩家1", "玩家2")
 
-# API 路由組（稍後加入）
-# app.include_router(game_router, prefix="/api/v1/games", tags=["games"])
-# app.include_router(player_router, prefix="/api/v1/players", tags=["players"])
+# API 路由組
+app.include_router(game.router, prefix="/api/v1/games", tags=["games"])
 
 # 靜態檔案服務（如果需要）
 # app.mount("/static", StaticFiles(directory="static"), name="static")

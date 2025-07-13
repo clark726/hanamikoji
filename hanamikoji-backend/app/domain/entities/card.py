@@ -73,6 +73,7 @@ class GiftCard:
     """禮物卡領域實體"""
 
     def __init__(self, geisha_id: str, item_name: str, charm_value: int):
+        self.card_id = str(uuid.uuid4())  # 添加唯一ID
         self.geisha_id = geisha_id
         self.item_name = item_name
         self.charm_value = charm_value
