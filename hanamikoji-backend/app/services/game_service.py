@@ -16,79 +16,132 @@ from app.database.mongodb import init_mongodb
 class GameService:
     """遊戲服務"""
     
-    def __init__(self, db: Session):
+    _instance = None
+    
+    def __new__(cls, db: Session = None):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self, db: Session = None):
+        if hasattr(self, '_initialized'):
+            return
         self.db = db
         self.game_init_service = GameInitializationService()
         
-        # 初始化MongoDB並設置儲存服務
-        self.use_mongodb = init_mongodb()
-        if self.use_mongodb:
-            self.mongodb_service = MongoDBGameService()
-        else:
-            # 使用內存存儲作為備用
-            self._games: Dict[str, Game] = {}
+        # 暫時使用內存存儲，確保功能正常
+        self._games: Dict[str, Dict] = {}
+        # 記錄每個遊戲的創建者和玩家會話
+        self._game_sessions: Dict[str, Dict] = {}
+        self._initialized = True
     
     def create_game(self, player1_name: str, player2_name: str) -> Dict[str, Any]:
         """創建新遊戲"""
         game_data = self.game_init_service.initialize_new_game(player1_name, player2_name)
         game_id = game_data["game_id"]
         
-        if self.use_mongodb:
-            # 從工廠創建Game實體然後保存到MongoDB
-            game_entity = self.game_init_service.game_factory.create_new_game(player1_name, player2_name)
-            success = self.mongodb_service.save_game(game_entity)
-            if not success:
-                print(f"⚠️  MongoDB保存失敗，遊戲 {game_id} 僅存在於內存中")
+        # 生成創建者token
+        import secrets
+        creator_token = secrets.token_urlsafe(16)
+        
+        # 保存到內存
+        self._games[game_id] = game_data
+        self._game_sessions[game_id] = {
+            'creator_token': creator_token,
+            'creator_player_id': list(game_data["players"].keys())[0],
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # 在返回數據中包含creator_token
+        game_data['creator_token'] = creator_token
+        
+        print(f"✅ 遊戲 {game_id} 已創建，創建者token: {creator_token}")
         
         return game_data
     
-    def get_game_state(self, game_id: str) -> Optional[Dict[str, Any]]:
+    def get_game_state(self, game_id: str, creator_token: str = None) -> Dict[str, Any]:
         """獲取遊戲狀態"""
-        if self.use_mongodb:
-            return self.mongodb_service.load_game(game_id)
+        # 從內存載入
+        game_state = self._games.get(game_id)
+        if not game_state:
+            raise ValueError("遊戲不存在")
+            
+        # 獲取會話信息
+        session_info = self._game_sessions.get(game_id, {})
+        player_ids = list(game_state['players'].keys())
+        
+        # 根據creator_token決定玩家身份
+        if creator_token and creator_token == session_info.get('creator_token'):
+            # 是創建者，分配為第一個玩家
+            assigned_player_id = player_ids[0]
+            player_role = 'creator'
+            print(f"✅ 創建者身份確認: token匹配，分配為player1")
         else:
-            # 從內存載入（備用方案）
-            if game_id not in self._games:
-                return None
-            return self._create_mock_game_state(game_id)
+            # 不是創建者，分配為第二個玩家
+            if len(player_ids) >= 2:
+                assigned_player_id = player_ids[1]
+                player_role = 'joiner'
+                print(f"✅ 加入者身份確認: 無token或token不匹配，分配為player2")
+            else:
+                # 如果只有一個玩家但不是創建者，說明可能有問題
+                print(f"⚠️ 警告: 遊戲只有一個玩家但請求者不是創建者")
+                assigned_player_id = player_ids[0]
+                player_role = 'unknown'
+        
+        # 添加玩家身份信息到響應中
+        response_data = game_state.copy()
+        response_data['player_assignment'] = {
+            'assigned_player_id': assigned_player_id,
+            'player_role': player_role,
+            'is_creator': player_role == 'creator'
+        }
+        
+        print(f"🔍 玩家身份分配: 遊戲{game_id}, token={creator_token[:8] if creator_token else 'None'}..., 角色={player_role}, 玩家ID={assigned_player_id}")
+        
+        return response_data
     
     def execute_action(self, game_id: str, action: ActionRequest) -> Dict[str, Any]:
         """執行遊戲動作"""
         # 檢查遊戲是否存在
-        if self.use_mongodb:
-            game_state = self.mongodb_service.load_game(game_id)
-            if not game_state:
-                raise ValueError("遊戲不存在")
-        else:
-            if game_id not in self._games:
-                raise ValueError("遊戲不存在")
+        if game_id not in self._games:
+            raise ValueError("遊戲不存在")
+        
+        game_state = self._games[game_id]
+        print(f"執行動作: 遊戲 {game_id}, 動作類型: {action.action_type}, 卡牌: {action.card_ids}")
+        
+        # 驗證是否為當前玩家
+        if action.player_id != game_state["current_player_id"]:
+            raise ValueError("不是當前玩家的回合")
         
         # 驗證動作有效性
-        self._validate_action(game_id, action)
+        try:
+            self._validate_action(game_id, action)
+        except ValueError as e:
+            print(f"動作驗證失敗: {str(e)}")
+            raise e
         
-        # 執行動作
-        result = self._execute_game_action(game_id, action)
+        # 執行動作後切換回合
+        self._switch_turn(game_state)
         
-        # 保存動作記錄
-        if self.use_mongodb:
-            self.mongodb_service.save_action(game_id, action, result)
+        # 更新遊戲狀態
+        self._games[game_id] = game_state
         
-        return result
+        return game_state
     
     def get_game_status(self, game_id: str) -> Optional[Dict[str, Any]]:
         """獲取遊戲簡要狀態"""
-        # TODO: 從資料庫獲取
         if game_id not in self._games:
             return None
             
+        game_state = self._games[game_id]
         return {
             "game_id": game_id,
-            "status": "PLAYING",
-            "current_player_id": "player1",
-            "round_number": 1,
-            "player_names": ["玩家1", "玩家2"],
+            "status": game_state.get("status", "PLAYING"),
+            "current_player_id": game_state.get("current_player_id"),
+            "round_number": game_state.get("round_number", 1),
+            "player_names": [player["name"] for player in game_state["players"].values()],
             "created_at": datetime.now().isoformat(),
-            "winner": None
+            "winner": game_state.get("winner")
         }
     
     def reset_game(self, game_id: str) -> Dict[str, Any]:
@@ -158,6 +211,28 @@ class GameService:
         
         raise ValueError(f"未知的動作類型: {action.action_type}")
     
+    def _switch_turn(self, game_state: Dict[str, Any]) -> None:
+        """切換回合"""
+        current_player_id = game_state["current_player_id"]
+        players = game_state["players"]
+        
+        # 找到另一個玩家
+        other_player_id = None
+        for player_id in players.keys():
+            if player_id != current_player_id:
+                other_player_id = player_id
+                break
+        
+        if other_player_id:
+            # 切換當前玩家
+            game_state["current_player_id"] = other_player_id
+            
+            # 更新玩家的is_current_player狀態
+            players[current_player_id]["is_current_player"] = False
+            players[other_player_id]["is_current_player"] = True
+            
+            print(f"回合已切換: {current_player_id} -> {other_player_id}")
+    
     def _execute_secret_action(self, game_id: str, action: ActionRequest) -> Dict[str, Any]:
         """執行秘密保留動作"""
         # TODO: 實現秘密保留邏輯
@@ -180,6 +255,10 @@ class GameService:
     
     def _create_mock_game_state(self, game_id: str) -> Dict[str, Any]:
         """創建模擬的遊戲狀態"""
+        # 檢查是否已有遊戲狀態
+        if game_id in self._games:
+            return self._games[game_id]
+            
         return {
             "game_id": game_id,
             "status": "PLAYING",

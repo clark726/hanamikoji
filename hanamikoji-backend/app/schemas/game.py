@@ -97,6 +97,8 @@ class GameStateResponse(BaseModel):
     geishas: List[Geisha]
     messages: List[GameMessage] = Field(default_factory=list)
     winner: Optional[str] = None
+    creator_token: Optional[str] = None
+    player_assignment: Optional[Dict[str, Any]] = None
 
 
 class GameStatusResponse(BaseModel):

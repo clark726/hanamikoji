@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     db_echo: bool = True
     
     # MongoDB設定
-    mongodb_url: str = "mongodb://localhost:30017"
+    mongodb_url: str = "mongodb://localhost:30017/hanamikoji_game"
     mongodb_db_name: str = "hanamikoji_game"
 
     # 安全設定

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import uuid
 
 from app.database.connection import get_db
@@ -25,13 +25,11 @@ async def create_game(
 ) -> Dict[str, Any]:
     """創建新遊戲"""
     try:
-        service = GameInitializationService()
-        game_data = service.initialize_new_game(
+        game_service = GameService(db)
+        game_data = game_service.create_game(
             request.player1_name, 
             request.player2_name
         )
-        
-        # 保存到資料庫的邏輯可以在這裡添加
         
         return game_data
     except Exception as e:
@@ -41,12 +39,14 @@ async def create_game(
 @router.get("/{game_id}", response_model=GameStateResponse)
 async def get_game_state(
     game_id: str,
+    creator_token: Optional[str] = None,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """獲取遊戲狀態"""
     try:
+        print(f"🔍 API接收到請求: game_id={game_id}, creator_token={creator_token}")
         game_service = GameService(db)
-        game_state = game_service.get_game_state(game_id)
+        game_state = game_service.get_game_state(game_id, creator_token)
         
         if not game_state:
             raise HTTPException(status_code=404, detail="遊戲未找到")
@@ -54,6 +54,8 @@ async def get_game_state(
         return game_state
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"獲取遊戲狀態失敗: {str(e)}")
 
@@ -62,21 +64,28 @@ async def get_game_state(
 async def execute_action(
     game_id: str,
     action: ActionRequest,
+    creator_token: Optional[str] = None,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """執行遊戲動作"""
     try:
+        print(f"🎮 接收到動作請求: 遊戲={game_id}, 玩家={action.player_id}, 動作={action.action_type}, 卡牌={action.card_ids}, token={creator_token}")
         game_service = GameService(db)
         result = game_service.execute_action(game_id, action)
+        
+        # 執行動作後，重新獲取包含player_assignment的完整狀態
+        full_state = game_service.get_game_state(game_id, creator_token)
         
         return {
             "success": True,
             "message": "動作執行成功",
-            "game_state": result
+            "game_state": full_state
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ 動作驗證錯誤: {str(e)}")
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
+        print(f"❌ 執行動作異常: {str(e)}")
         raise HTTPException(status_code=500, detail=f"執行動作失敗: {str(e)}")
 
 

@@ -6,25 +6,42 @@ from datetime import datetime
 
 from app.domain.entities.room import Room, RoomPlayer
 from app.services.mongodb_room_service import MongoDBRoomService
+from app.services.game_service import GameService
 
 
 class RoomService:
     """房間管理業務邏輯服務"""
     
-    def __init__(self):
+    def __init__(self, db=None):
         self.mongo_service = MongoDBRoomService()
         self._active_rooms: Dict[str, Room] = {}
+        self.db = db
     
     def find_available_room(self) -> Optional[Room]:
         """尋找可用的房間"""
-        # 從MongoDB載入等待中的房間
-        waiting_rooms = self.mongo_service.get_rooms_by_status("waiting")
-        
-        for room_data in waiting_rooms:
-            room = Room.from_dict(room_data)
-            if not room.is_full():
+        # 首先檢查內存中的活躍房間
+        for room in self._active_rooms.values():
+            if room.status == "waiting" and not room.is_full():
+                print(f"✅ 在內存中找到可用房間: {room.room_id}")
                 return room
         
+        # 從MongoDB載入等待中的房間作為備選
+        try:
+            waiting_rooms = self.mongo_service.get_rooms_by_status("waiting")
+            print(f"🔍 查找可用房間，找到 {len(waiting_rooms)} 個等待中的房間")
+            
+            for room_data in waiting_rooms:
+                room = Room.from_dict(room_data)
+                print(f"📋 檢查房間 {room.room_id}: 玩家數 {len(room.players)}/{room.max_players}, 狀態 {room.status}")
+                if not room.is_full():
+                    print(f"✅ 從MongoDB找到可用房間: {room.room_id}")
+                    # 加載到內存緩存
+                    self._active_rooms[room.room_id] = room
+                    return room
+        except Exception as e:
+            print(f"⚠️ MongoDB查詢失敗，使用內存存儲: {e}")
+        
+        print("❌ 沒有找到可用房間，將創建新房間")
         return None
     
     def create_room(self) -> Room:
@@ -77,9 +94,23 @@ class RoomService:
         
         # 如果房間滿了，準備開始遊戲
         if room.status == "starting":
-            # 這裡可以觸發遊戲創建邏輯
-            response["message"] = "遊戲即將開始"
-            # TODO: 整合遊戲創建服務
+            # 自動創建遊戲
+            game_result = self._create_game_for_room(room)
+            if game_result.get("success"):
+                game_id = game_result["game_id"]
+                room.game_id = game_id
+                room.status = "playing"
+                room.started_at = datetime.now()
+                
+                # 更新房間狀態
+                self.mongo_service.save_room(room)
+                self._active_rooms[room.room_id] = room
+                
+                response = room.to_dict()
+                response["message"] = "遊戲已開始"
+                response["game_id"] = game_id
+            else:
+                response["message"] = "遊戲創建失敗，請稍後重試"
             
         return response
     
@@ -221,3 +252,44 @@ class RoomService:
             del self._active_rooms[room_id]
         
         return True
+    
+    def _create_game_for_room(self, room: Room) -> Dict:
+        """為房間創建遊戲"""
+        if len(room.players) != 2:
+            return {
+                "success": False,
+                "error": "房間玩家數量不足"
+            }
+        
+        try:
+            # 獲取玩家信息
+            player1 = room.players[0]
+            player2 = room.players[1]
+            
+            # 使用遊戲服務創建遊戲
+            game_service = GameService(self.db)
+            game_data = game_service.create_game(
+                player1.player_name, 
+                player2.player_name
+            )
+            
+            # 提取 game_id
+            game_id = game_data.get("game_id")
+            
+            if not game_id:
+                return {
+                    "success": False,
+                    "error": "遊戲創建失敗，無法獲取遊戲ID"
+                }
+            
+            return {
+                "success": True,
+                "game_id": game_id,
+                "game_data": game_data
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"遊戲創建失敗: {str(e)}"
+            }

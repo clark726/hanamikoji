@@ -1,4 +1,5 @@
-我要做桌遊 花見小路前後端分離的專案前端我要用react、後端用fastAPI透過WebSocket即時連線
+我要做桌遊 花見小路前後端分離的專案前端我要用react、後端用fastAPI透過WebSocket即時連線需要有基本的Domain drive design，有分層的架構
+ORM跟domain物件隔離
 
 遊戲基本
 單一入口：用戶只訪問一個URL即可進入遊戲

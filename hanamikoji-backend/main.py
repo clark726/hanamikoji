@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 # 導入設定檔
 from app.config.settings import settings
 from app.database.connection import get_db
+from app.database.mongodb import init_mongodb
 from app.domain.factories.game_factory import GameInitializationService
-from app.api.routes import game
+from app.api.routes import game, room
 
 # 建立 FastAPI 應用程式
 app = FastAPI(
@@ -45,7 +46,8 @@ async def health_check(db: Session = Depends(get_db)):
     """健康檢查端點"""
     try:
         # 測試資料庫連接
-        db.execute("SELECT 1")
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
         db_status = f"error: {str(e)}"
@@ -64,6 +66,7 @@ async def games():
 
 # API 路由組
 app.include_router(game.router, prefix="/api/v1/games", tags=["games"])
+app.include_router(room.router, prefix="/api/v1/rooms", tags=["rooms"])
 
 # 靜態檔案服務（如果需要）
 # app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -72,11 +75,14 @@ if __name__ == "__main__":
     print("🎌 花見小路遊戲後端啟動中...")
     print(f"🔧 環境: {settings.environment}")
     print(f"🐛 除錯模式: {settings.debug}")
+    
+    # 初始化 MongoDB
+    init_mongodb()
 
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8080,
+        port=8000,
         reload=settings.debug,  # 開發環境自動重載
         log_level="info" if settings.debug else "warning"
     )

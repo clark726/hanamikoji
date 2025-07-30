@@ -13,7 +13,16 @@ class MongoDBRoomService:
     """MongoDB房間儲存服務"""
     
     def __init__(self):
-        self.rooms_collection = mongodb.get_collection("rooms")
+        # 延遲初始化，確保 MongoDB 已連接
+        self.rooms_collection = None
+    
+    def _get_collection(self):
+        """獲取房間集合，確保連接已建立"""
+        if self.rooms_collection is None:
+            if mongodb.database is None:
+                mongodb.connect()
+            self.rooms_collection = mongodb.get_collection("rooms")
+        return self.rooms_collection
     
     def save_room(self, room: Room) -> bool:
         """保存房間到MongoDB"""
@@ -43,7 +52,7 @@ class MongoDBRoomService:
             )
             
             # 使用upsert來避免重複
-            self.rooms_collection.replace_one(
+            self._get_collection().replace_one(
                 {"room_id": room.room_id},
                 room_doc.dict(by_alias=True, exclude={"id"}),
                 upsert=True
@@ -58,7 +67,7 @@ class MongoDBRoomService:
     def get_room(self, room_id: str) -> Optional[Dict[str, Any]]:
         """從MongoDB獲取房間"""
         try:
-            room_doc = self.rooms_collection.find_one({"room_id": room_id})
+            room_doc = self._get_collection().find_one({"room_id": room_id})
             if room_doc:
                 # 移除MongoDB的_id欄位
                 room_doc.pop("_id", None)
@@ -76,7 +85,7 @@ class MongoDBRoomService:
             if status:
                 query["status"] = status
             
-            cursor = self.rooms_collection.find(query).sort("created_at", -1).limit(limit)
+            cursor = self._get_collection().find(query).sort("created_at", -1).limit(limit)
             rooms = []
             
             for room_doc in cursor:
@@ -92,7 +101,7 @@ class MongoDBRoomService:
     def get_rooms_by_status(self, status: str) -> List[Dict[str, Any]]:
         """根據狀態獲取房間"""
         try:
-            cursor = self.rooms_collection.find({"status": status}).sort("created_at", -1)
+            cursor = self._get_collection().find({"status": status}).sort("created_at", -1)
             rooms = []
             
             for room_doc in cursor:
@@ -109,7 +118,7 @@ class MongoDBRoomService:
         """尋找玩家所在的房間"""
         try:
             # 查找包含指定玩家ID的房間
-            room_doc = self.rooms_collection.find_one({
+            room_doc = self._get_collection().find_one({
                 "players.player_id": player_id,
                 "status": {"$in": ["waiting", "starting", "playing"]}  # 排除已結束或放棄的房間
             })
@@ -127,7 +136,7 @@ class MongoDBRoomService:
     def delete_room(self, room_id: str) -> bool:
         """刪除房間"""
         try:
-            result = self.rooms_collection.delete_one({"room_id": room_id})
+            result = self._get_collection().delete_one({"room_id": room_id})
             return result.deleted_count > 0
             
         except Exception as e:
@@ -137,7 +146,7 @@ class MongoDBRoomService:
     def update_room_status(self, room_id: str, status: str) -> bool:
         """更新房間狀態"""
         try:
-            result = self.rooms_collection.update_one(
+            result = self._get_collection().update_one(
                 {"room_id": room_id},
                 {
                     "$set": {
@@ -163,7 +172,7 @@ class MongoDBRoomService:
                 "last_seen": datetime.now()
             }
             
-            result = self.rooms_collection.update_one(
+            result = self._get_collection().update_one(
                 {"room_id": room_id},
                 {
                     "$push": {"players": player_data},
@@ -179,7 +188,7 @@ class MongoDBRoomService:
     def remove_player_from_room(self, room_id: str, player_id: str) -> bool:
         """從房間移除玩家"""
         try:
-            result = self.rooms_collection.update_one(
+            result = self._get_collection().update_one(
                 {"room_id": room_id},
                 {
                     "$pull": {"players": {"player_id": player_id}},
@@ -195,7 +204,7 @@ class MongoDBRoomService:
     def update_player_status_in_room(self, room_id: str, player_id: str, status: str) -> bool:
         """更新房間中玩家的狀態"""
         try:
-            result = self.rooms_collection.update_one(
+            result = self._get_collection().update_one(
                 {"room_id": room_id, "players.player_id": player_id},
                 {
                     "$set": {
@@ -214,7 +223,7 @@ class MongoDBRoomService:
     def get_waiting_rooms_count(self) -> int:
         """獲取等待中的房間數量"""
         try:
-            return self.rooms_collection.count_documents({"status": "waiting"})
+            return self._get_collection().count_documents({"status": "waiting"})
         except Exception as e:
             print(f"獲取等待房間數量失敗: {e}")
             return 0
@@ -222,7 +231,7 @@ class MongoDBRoomService:
     def get_active_rooms_count(self) -> int:
         """獲取活躍房間數量"""
         try:
-            return self.rooms_collection.count_documents({
+            return self._get_collection().count_documents({
                 "status": {"$in": ["waiting", "starting", "playing"]}
             })
         except Exception as e:
@@ -235,7 +244,7 @@ class MongoDBRoomService:
             # 刪除狀態為 abandoned 且創建時間超過1小時的房間
             one_hour_ago = datetime.now() - timedelta(hours=1)
             
-            result = self.rooms_collection.delete_many({
+            result = self._get_collection().delete_many({
                 "status": "abandoned",
                 "created_at": {"$lt": one_hour_ago}
             })

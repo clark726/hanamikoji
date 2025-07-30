@@ -176,15 +176,15 @@ class GameInitializationService:
             "current_player_id": game.current_player.id,
             "round_number": game.round_number,
             "players": {
-                game.player1.id: self._player_to_dict(game.player1),
-                game.player2.id: self._player_to_dict(game.player2)
+                game.player1.id: self._player_to_dict(game.player1, game.current_player),
+                game.player2.id: self._player_to_dict(game.player2, game.current_player)
             },
             "geishas": [self._geisha_to_dict(geisha) for geisha in game.geishas],
             "messages": [],
             "winner": None
         }
 
-    def _player_to_dict(self, player: Player) -> Dict:
+    def _player_to_dict(self, player: Player, current_player: Player) -> Dict:
         """將玩家轉換為字典"""
         return {
             "id": player.id,
@@ -194,7 +194,7 @@ class GameInitializationService:
             "secret_cards": [],
             "allocated_gifts": {},
             "score": 0,
-            "is_current_player": player == player  # 待實現正確邏輯
+            "is_current_player": player.id == current_player.id
         }
 
     def _card_to_dict(self, card: GiftCard) -> Dict:
